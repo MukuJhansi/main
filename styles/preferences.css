@@ -1,0 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Baloo+Bhaijaan+2:wght@600&family=Poppins&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Balsamiq+Sans&display=swap');
+*{
+    --main:#6e6a6a;
+    --button-1:#a881af;
+    --white:#f8f5f5;
+    font-family: 'Balsamiq Sans', sans-serif !important;
+}

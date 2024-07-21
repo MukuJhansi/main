@@ -1,0 +1,20 @@
+@import url(/styles/preferences.css);
+
+*{
+    --main:#633500;
+    --red:#e33030;
+}
+body{
+    background-color: var(--red);
+}
+h1{
+    color: var(--main);
+}
+
+li{
+    list-style-type: none;
+}
+ 
+.nav{
+display: flex;
+}

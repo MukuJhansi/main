@@ -1,0 +1,52 @@
+@import url(/styles/preferences.css);
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+}
+
+#login-container {
+    max-width: 400px;
+    margin: 50px auto;
+    padding: 20px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+#signup-container {
+    max-width: 200px;
+    margin: 50px auto;
+    padding: 20px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    box-sizing: border-box;
+}
+
+.button {
+    background-color: teal;
+    color: #fff;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 100%;
+}
+button:hover {
+    background-color: #45a049;
+}
+
+#Signup{
+    background-color: color-mix(in hsl longer hue, color percentage, color percentage);
+    padding: 10px;
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    width: 160px;
+}

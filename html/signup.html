@@ -1,0 +1,56 @@
+<!-- signup.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/styles/signup.css">
+    <script src="/script/signup.js"></script>
+    <title>Signup Page</title>
+</head>
+
+<body>
+
+    <div id="signup-container">
+        <h2>Signup</h2>
+        <form id="signup-form">
+            <label for="name">Full Name:</label>
+            <input type="text" id="name" name="name" required>
+
+            <label for="email">Email:</label>
+            <input type="email" id="id" name="id" required>
+
+            <label for="mobile">Mobile Number:</label>
+            <input type="tel" id="mobile" name="mobile" required>
+
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+
+            <!-- Add a div to wrap OTP input and make it hidden initially -->
+            <div id="otpContainer" style="display:none;">
+                <label for="otp">Enter OTP:</label>
+                <input type="text" id="otp" name="otp" required>
+
+                <!-- Button to verify OTP -->
+                <!-- Button to verify OTP -->
+                <button type="button" id="verifyOTPButton" onclick="verifyOTP()">Verify OTP</button>
+            </div>
+
+            <!-- Button to generate OTP and show OTP field -->
+            <button type="button" id="generateOTPButton" onclick="generateOTPAndShowField()">Generate OTP & Show OTP
+                Field</button>
+
+            <!-- Button to resend OTP (initially hidden) -->
+            <button type="button" id="resendOTPButton" style="display:none;" onclick="resendOTP()">Resend OTP</button>
+
+            <!-- Button to attempt signup (initially hidden) -->
+            <button type="button" id="signupButton" style="display:none;" onclick="attemptSignup()" >Signup</button>
+        </form>
+    </div>
+    <div class="backToLogin" id="id01">
+    <button class="backToLogin"><a href="/login/" class="login">Back to Login</a></button>
+    </div>
+</body>
+
+</html>
