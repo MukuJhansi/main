@@ -245,11 +245,11 @@ app.get('/payment', isAuthenticated, (req, res) => {
     res.sendFile(path.join(__dirname, 'logged', 'payment.html'));
 });
 
-app.listen(PORT, '192.168.29.113', (err) => {
+app.listen(PORT, '0.0.0.0', (err) => {
     if (err) {
         console.error('Server startup error:', err);
     } else {
-        console.log(`Server is running on http://192.168.29.113:${PORT}`);
+        console.log(`Server is running on http://0.0.0.0:${PORT}`);
     }
 });
 
