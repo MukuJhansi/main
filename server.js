@@ -183,22 +183,27 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// Handle signup
 app.post('/signup', async (req, res) => {
     const { username, password, name, id, otp } = req.body;
 
-    if (!username || !password || !name || !id || !otp) {
+    console.log('Signup Request Body:', { username, password, name, id, otp });  // Debugging log
+
+    if (!username || !password || !name || !otp) {
         console.log('Error: All fields are required.');  // Debug log
         return res.json({ success: false, message: "All fields are required." });
     }
 
     const storedOTP = req.session.otp;
 
+    console.log('Stored OTP:', storedOTP);  // Debug log
+    console.log('Provided OTP:', otp);      // Debug log
+
     if (otp !== storedOTP) {
         console.log('Error: Invalid OTP.');  // Debug log
         return res.json({ success: false, message: "Invalid OTP. Please try again." });
     }
 
+    // Clear the OTP from session after successful verification
     delete req.session.otp;
 
     try {
@@ -216,15 +221,12 @@ app.post('/signup', async (req, res) => {
                 'INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4) RETURNING id',
                 [username, hashedPassword, name, id]
             );
-
-            console.log('Insert result:');
+            console.log('Insert result:');  // Debug log
             console.log(result);
-            
-            if (result.rows.length > 0) {
-                return res.json({ success: true });
-            } else {
-                return res.json({ success: false, message: "Failed to signup. Please try again." });
-            }
+            return res.json({ success: true });
+        } catch (insertError) {
+            console.error('Error executing query:', insertError);
+            return res.status(500).json({ success: false, message: "Failed to signup. Please try again." });
         } finally {
             client.release();
         }
