@@ -95,7 +95,6 @@ app.get('/dashboard', isAuthenticated, (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'dashboard.html'));
 });
 
-// Handle OTP generation
 app.post('/generate-otp', async (req, res) => {
     try {
         const { name, id, mobile, password } = req.body;
@@ -107,7 +106,8 @@ app.post('/generate-otp', async (req, res) => {
         const otp = generateOTP();
         req.session.otp = otp;
 
-        console.log('Generated OTP:', otp); // Log the generated OTP for debugging
+        console.log('Generated OTP:', otp);  // Debug log
+        console.log('Stored OTP in session:', req.session.otp);  // Debug log
 
         const mailOptions = {
             from: 'a@3pmmsm.onmicrosoft.com',
@@ -186,24 +186,20 @@ app.post('/login', async (req, res) => {
 app.post('/signup', async (req, res) => {
     const { username, password, name, id, otp } = req.body;
 
-    console.log('Signup Request Body:', { username, password, name, id, otp });  // Debugging log
-
     if (!username || !password || !name || !otp) {
         console.log('Error: All fields are required.');  // Debug log
         return res.json({ success: false, message: "All fields are required." });
     }
 
     const storedOTP = req.session.otp;
-
     console.log('Stored OTP:', storedOTP);  // Debug log
-    console.log('Provided OTP:', otp);      // Debug log
+    console.log('Provided OTP:', otp);  // Debug log
 
     if (otp !== storedOTP) {
         console.log('Error: Invalid OTP.');  // Debug log
         return res.json({ success: false, message: "Invalid OTP. Please try again." });
     }
 
-    // Clear the OTP from session after successful verification
     delete req.session.otp;
 
     try {
@@ -221,12 +217,12 @@ app.post('/signup', async (req, res) => {
                 'INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4) RETURNING id',
                 [username, hashedPassword, name, id]
             );
-            console.log('Insert result:');  // Debug log
-            console.log(result);
-            return res.json({ success: true });
-        } catch (insertError) {
-            console.error('Error executing query:', insertError);
-            return res.status(500).json({ success: false, message: "Failed to signup. Please try again." });
+            console.log('Insert result:', result);  // Debug log
+            if (result.rows.length > 0) {
+                return res.json({ success: true });
+            } else {
+                return res.json({ success: false, message: "Failed to signup. Please try again." });
+            }
         } finally {
             client.release();
         }
