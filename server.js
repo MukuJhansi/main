@@ -147,7 +147,7 @@ app.post('/verify-otp', (req, res) => {
     }
 });
 
-//Login
+// Handle login
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
 
@@ -164,10 +164,7 @@ app.post('/login', async (req, res) => {
         }
 
         const hashedPassword = result.rows[0].password;
-        console.log(`Password from DB: ${hashedPassword}`);  // Log password from DB
         const passwordMatch = await bcrypt.compare(password, hashedPassword);
-
-        console.log(`Password match: ${passwordMatch}`);  // Log result of password comparison
 
         if (passwordMatch) {
             req.session.userId = result.rows[0].id;
@@ -181,10 +178,11 @@ app.post('/login', async (req, res) => {
     }
 });
 
+// Handle signup
 app.post('/signup', async (req, res) => {
     const { username, password, name, id, otp } = req.body;
 
-    if (!username || !password || !name || !otp) {
+    if (!username || !password || !name || !id || !otp) {
         console.log('Error: All fields are required.');  // Debug log
         return res.json({ success: false, message: "All fields are required." });
     }
@@ -211,20 +209,25 @@ app.post('/signup', async (req, res) => {
         try {
             const result = await client.query(
                 'INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4) RETURNING id',
-                ['testuser', hashedPassword, 'Test User', 'test@example.com']
+                [username, hashedPassword, name, id]
             );
-            console.log('Hardcoded Insert result:');
+
+            console.log('Insert result:');
             console.log(result);
-        } catch (insertError) {
-            console.error('Error executing hardcoded query:', insertError);
+            
+            if (result.rows.length > 0) {
+                return res.json({ success: true });
+            } else {
+                return res.json({ success: false, message: "Failed to signup. Please try again." });
+            }
+        } finally {
+            client.release();
         }
-        
     } catch (error) {
         console.error('Error during signup:', error);  // Log error
         return res.status(500).json({ success: false, message: "Internal server error." });
     }
 });
-
 
 // Handle signout request
 app.post('/signout', (req, res) => {
@@ -237,22 +240,7 @@ app.post('/signout', (req, res) => {
     });
 });
 
-app.get('/dashboard', isAuthenticated, (req, res) => {
-    res.sendFile(path.join(__dirname, 'logged', 'dashboard.html'));
-});
-
-app.get('/payment', isAuthenticated, (req, res) => {
-    res.sendFile(path.join(__dirname, 'logged', 'payment.html'));
-});
-
-app.listen(PORT, '0.0.0.0', (err) => {
-    if (err) {
-        console.error('Server startup error:', err);
-    } else {
-        console.log(`Server is running on http://0.0.0.0:${PORT}`);
-    }
-});
-
+// Middleware to check authentication
 function isAuthenticated(req, res, next) {
     if (req.session.userId) {
         next();
@@ -260,3 +248,15 @@ function isAuthenticated(req, res, next) {
         res.redirect('/login');
     }
 }
+
+app.get('/dashboard', isAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, 'html', 'dashboard.html'));
+});
+
+app.get('/payment', isAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, 'html', 'payment.html'));
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
