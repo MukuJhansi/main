@@ -261,12 +261,12 @@ h1 {
     transform: translateY(-50%);
 }
 
-.rick{
+.Rick{
     text-decoration: none;
+    font-weight: bolder;
     color: #333;
-    padding: 5px;
     outline: 1.2px;
-    margin: 10px;
+    background-color: #8d9297;
 }
 
 @media screen and (max-weight: 320px) {
