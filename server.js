@@ -209,24 +209,16 @@ app.post('/signup', async (req, res) => {
         console.log('Email:', id);
 
         try {
-            const result = await client.query('INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4) RETURNING id', [username, hashedPassword, name, id]);
-
-            console.log('Insert result:');  // Debug log
-            console.log(result);  // Log result of the query
-
-            if (result.rows.length > 0) {
-                console.log('Signup successful. User ID:', result.rows[0].id);  // Debug log
-                return res.json({ success: true });
-            } else {
-                console.log('Error: Failed to signup.');  // Debug log
-                return res.json({ success: false, message: "Failed to signup. Please try again." });
-            }
+            const result = await client.query(
+                'INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4) RETURNING id',
+                ['testuser', hashedPassword, 'Test User', 'test@example.com']
+            );
+            console.log('Hardcoded Insert result:');
+            console.log(result);
         } catch (insertError) {
-            console.error('Error executing query:', insertError);  // Log error
-            return res.status(500).json({ success: false, message: "Failed to signup. Please try again." });
-        } finally {
-            client.release();
+            console.error('Error executing hardcoded query:', insertError);
         }
+        
     } catch (error) {
         console.error('Error during signup:', error);  // Log error
         return res.status(500).json({ success: false, message: "Internal server error." });
