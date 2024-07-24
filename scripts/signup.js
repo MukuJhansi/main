@@ -1,10 +1,10 @@
 document.addEventListener('DOMContentLoaded', function () {
     // Function to generate OTP and show OTP field
     function generateOTPAndShowField() {
-        const name = document.getElementById("name").value;
-        const id = document.getElementById("id").value;
-        const mobile = document.getElementById("mobile").value;
-        const password = document.getElementById("password").value;
+        let name = document.getElementById("name").value;
+        let id = document.getElementById("id").value;
+        let mobile = document.getElementById("mobile").value;
+        let password = document.getElementById("password").value;
 
         // Disable the "Generate OTP & Show OTP Field" button after the first click
         document.getElementById("generateOTPButton").disabled = true;
@@ -22,23 +22,21 @@ document.addEventListener('DOMContentLoaded', function () {
             if (data.success) {
                 // Display OTP field or handle it as needed
                 document.getElementById("otpContainer").style.display = "block";
-                document.getElementById("signupButton").style.display = "inline";  // Show signup button
+                document.getElementById("signupButton").style.display = "inline"; // Show signup button
                 alert("OTP generated successfully!");
             } else {
-                alert(`Failed to generate OTP: ${data.message}`);
-                document.getElementById("generateOTPButton").disabled = false;  // Re-enable button
+                alert(`Failed to generate OTP. ${data.message}`);
             }
         })
         .catch(error => {
             console.error('Error:', error);
             alert("An error occurred while generating OTP. Please try again later.");
-            document.getElementById("generateOTPButton").disabled = false;  // Re-enable button
         });
     }
 
     // Function to handle OTP verification
     function verifyOTP() {
-        const otp = document.getElementById("otp").value;
+        let otp = document.getElementById("otp").value;
 
         // Make an AJAX request to verify OTP
         fetch('/verify-otp', {
@@ -51,11 +49,11 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Display signup button and allow user to proceed
-                document.getElementById("signupButton").style.display = "inline";
-                alert("OTP verified successfully! You can now sign up.");
+                alert("OTP verified successfully! You can now proceed to signup.");
+                // Optionally hide the OTP container or reset the form
+                document.getElementById("signupButton").style.display = "inline"; // Show signup button
             } else {
-                alert(`Failed to verify OTP: ${data.message}`);
+                alert(`Failed to verify OTP. ${data.message}`);
             }
         })
         .catch(error => {
@@ -66,19 +64,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Function to resend OTP
     function resendOTP() {
+        // Reset the OTP field
+        document.getElementById("otp").value = "";
+
         // Call the function to generate OTP and show the OTP field
         generateOTPAndShowField();
     }
 
-    // Function to handle signup submission
+    // Function to attempt signup
     function attemptSignup() {
-        const username = document.getElementById("name").value;
-        const password = document.getElementById("password").value;
-        const name = document.getElementById("name").value;
-        const id = document.getElementById("id").value;
-        const otp = document.getElementById("otp").value;
+        let username = document.getElementById("name").value;
+        let password = document.getElementById("password").value;
+        let name = document.getElementById("name").value;
+        let id = document.getElementById("id").value;
+        let otp = document.getElementById("otp").value;
 
-        // Make an AJAX request to sign up
+        // Make an AJAX request to signup
         fetch('/signup', {
             method: 'POST',
             headers: {
@@ -89,10 +90,10 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert("Signup successful! Redirecting to login.");
+                alert("Signup successful!");
                 window.location.href = "/login";  // Redirect to login page
             } else {
-                alert(`Failed to sign up: ${data.message}`);
+                alert(`Failed to signup. ${data.message}`);
             }
         })
         .catch(error => {
