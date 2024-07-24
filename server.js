@@ -9,7 +9,7 @@ const nodemailer = require('nodemailer');
 const { time, timeLog, timeEnd } = require('console');
 
 const app = express();
-const PORT = 800;
+const PORT = 443;
 
 app.use(express.static('public'));
 app.use('/styles', express.static(path.join(__dirname, 'styles')));
