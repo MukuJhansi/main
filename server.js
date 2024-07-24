@@ -4,12 +4,35 @@ const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
 const session = require('express-session');
-const PgSession = require('connect-pg-simple')(session);
+const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
 const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = 443;
+
+// Database configuration
+const dbConfig = {
+    user: 'user_pnj7_user',
+    host: 'dpg-cqgfq62ju9rs73cdicu0-a',
+    database: 'user_pnj7',
+    password: 'c2c6apNS6pCoyYRdv5eGqJzoGf78ptLN',
+    port: 5432,
+};
+
+const pool = new Pool(dbConfig);
+
+// Session store configuration
+app.use(session({
+    store: new pgSession({
+        pool, // Connection pool
+        tableName: 'session' // Use another table-name than the default "session" one
+    }),
+    secret: 'GRP"mFa`wL9?D%X]etH>k#',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 } // 1 week
+}));
 
 app.use(express.static('public'));
 app.use('/styles', express.static(path.join(__dirname, 'styles')));
@@ -22,28 +45,25 @@ app.use('/script/', express.static(path.join(__dirname, 'scripts')));
 app.use(bodyParser.json());
 app.use(cors());
 
-const dbConfig = {
-    user: 'user_pnj7_user',
-    host: 'dpg-cqgfq62ju9rs73cdicu0-a',
-    database: 'user_pnj7',
-    password: 'c2c6apNS6pCoyYRdv5eGqJzoGf78ptLN',
-    port: 5432,
-};
-
-const pool = new Pool(dbConfig);
-
-app.use(session({
-    store: new PgSession({
-        pool: pool,
-        tableName: 'session' // Use another table-name than the default "session" one
-    }),
-    secret: 'GRP"mFa`wL9?D%X]etH>k#',
-    resave: true,
-    saveUninitialized: false,
-    cookie: {
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+const transporter = nodemailer.createTransport({
+    host: 'smtp.office365.com',
+    port: 587,
+    secure: false,
+    auth: {
+        user: 'a@3pmmsm.onmicrosoft.com',
+        pass: 'Mukund@123',
     },
-}));
+    tls: {
+        ciphers: 'SSLv3',
+        minVersion: 'TLSv1',
+        maxVersion: 'TLSv1.2',
+    },
+    debug: true
+});
+
+function generateOTP() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 // Serve the home page
 app.get('/', (req, res) => {
@@ -75,35 +95,8 @@ app.get('/dashboard', isAuthenticated, (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'dashboard.html'));
 });
 
-
-const transporter = nodemailer.createTransport({
-    host: 'smtp.office365.com',
-    port: 587,
-    secure: false,
-    auth: {
-        user: 'a@3pmmsm.onmicrosoft.com',
-        pass: 'Mukund@123',
-    },
-    tls: {
-        ciphers: 'SSLv3',
-        minVersion: 'TLSv1', // Adjust based on server requirements
-        maxVersion: 'TLSv1.2', // Adjust based on server requirements
-    },
-    debug: true
-});
-
-function generateOTP() {
-    return Math.floor(100000 + Math.random() * 900000);
-}
-
-// ...
-
-// Function to generate OTP
-function generateOTP() {
-    return Math.floor(100000 + Math.random() * 900000);
-}
-
-app.post('/generate-otp', (req, res) => {
+// Handle OTP generation
+app.post('/generate-otp', async (req, res) => {
     try {
         const { name, id, mobile, password } = req.body;
 
@@ -112,7 +105,6 @@ app.post('/generate-otp', (req, res) => {
         }
 
         const otp = generateOTP();
-
         req.session.otp = otp;
 
         const mailOptions = {
@@ -122,24 +114,26 @@ app.post('/generate-otp', (req, res) => {
             text: `Your OTP for registration is: ${otp}`,
         };
 
-        transporter.sendMail(mailOptions)
-            .then(() => res.json({ success: true, otp }))  // Include OTP in the response
-            .catch((error) => {
-                console.error('Error sending OTP:', error);
-                res.json({ success: false, message: "Failed to send OTP. Please try again." });
-            });
+        try {
+            await transporter.sendMail(mailOptions);
+            res.json({ success: true, otp }); // Include OTP in the response
+        } catch (emailError) {
+            console.error('Error sending OTP:', emailError);
+            res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
+        }
     } catch (error) {
         console.error('Error in /generate-otp:', error);
         return res.status(500).json({ success: false, message: "Internal server error during OTP generation." });
     }
 });
 
+// Handle OTP verification
 app.post('/verify-otp', (req, res) => {
     try {
         const { otp } = req.body;
         const storedOTP = req.session.otp;
 
-        if (!otp || storedOTP !== parseInt(otp)) {  // Parse the OTP to an integer for strict comparison
+        if (!otp || storedOTP !== otp) {
             return res.status(400).json({ success: false, message: "Invalid OTP. Please try again." });
         }
 
@@ -153,6 +147,7 @@ app.post('/verify-otp', (req, res) => {
     }
 });
 
+// Handle login request
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
 
@@ -160,20 +155,19 @@ app.post('/login', async (req, res) => {
         return res.json({ success: false, message: "Username and password are required." });
     }
 
-    const connection = await mysql.createConnection(dbConfig);
-
     try {
-        const [rows] = await connection.execute('SELECT id, password FROM users WHERE username = ?', [username]);
+        const client = await pool.connect();
+        const result = await client.query('SELECT id, password FROM users WHERE username = $1', [username]);
 
-        if (rows.length === 0) {
+        if (result.rows.length === 0) {
             return res.json({ success: false, message: "Invalid username or password." });
         }
 
-        const hashedPassword = rows[0].password;
+        const hashedPassword = result.rows[0].password;
         const passwordMatch = await bcrypt.compare(password, hashedPassword);
 
         if (passwordMatch) {
-            req.session.userId = rows[0].id;
+            req.session.userId = result.rows[0].id;
             return res.json({ success: true });
         } else {
             return res.json({ success: false, message: "Invalid username or password." });
@@ -181,8 +175,6 @@ app.post('/login', async (req, res) => {
     } catch (error) {
         console.error('Error:', error);
         return res.status(500).json({ success: false, message: "Internal server error." });
-    } finally {
-        await connection.end();
     }
 });
 
@@ -194,53 +186,36 @@ app.post('/signup', async (req, res) => {
         return res.json({ success: false, message: "All fields are required." });
     }
 
-    // Retrieve the stored OTP from session
     const storedOTP = req.session.otp;
 
-    // Check if the OTP provided by the user matches the stored OTP
     if (otp !== storedOTP) {
         return res.json({ success: false, message: "Invalid OTP. Please try again." });
     }
 
-    // Clear the OTP from session after successful verification
     delete req.session.otp;
 
-    const mailOptions = {
-        from: 'a@3pmmsm.onmicrosoft.com',
-        to: id,
-        subject: 'Verification OTP',
-        text: `Your OTP for registration is: ${storedOTP}`,
-    };
-
     try {
-        const info = await transporter.sendMail(mailOptions);
-        console.log('Email sent:', info.response);
-
         const hashedPassword = await bcrypt.hash(password, 10);
-
-        const connection = await mysql.createConnection(dbConfig);
+        const client = await pool.connect();
 
         try {
-            const [result] = await connection.execute('INSERT INTO users (username, password, name, id, otp) VALUES (?, ?, ?, ?, ?)', [username, hashedPassword, name, id, storedOTP]);
+            const result = await client.query('INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4) RETURNING id', [username, hashedPassword, name, id]);
 
-            if (result.insertId) {
-                res.header('X-Content-Type-Options', 'nosniff');
+            if (result.rows.length > 0) {
                 return res.json({ success: true });
             } else {
                 return res.json({ success: false, message: "Failed to signup. Please try again." });
             }
-        } catch (error) {
-            console.error('Error:', error);
-            return res.status(500).json({ success: false, message: "Internal server error." });
         } finally {
-            await connection.end();
+            client.release();
         }
     } catch (error) {
-        console.error('Error sending OTP:', error);
-        return res.json({ success: false, message: "Failed to send OTP. Please try again." });
+        console.error('Error:', error);
+        return res.status(500).json({ success: false, message: "Internal server error." });
     }
 });
 
+// Handle signout request
 app.post('/signout', (req, res) => {
     req.session.destroy((err) => {
         if (err) {
