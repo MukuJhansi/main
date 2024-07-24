@@ -22,7 +22,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (data.success) {
                 // Display OTP field or handle it as needed
                 document.getElementById("otpContainer").style.display = "block";
-                document.getElementById("signupButton").style.display = "inline"; // Show signup button
                 alert("OTP generated successfully!");
             } else {
                 alert(`Failed to generate OTP. ${data.message}`);
@@ -49,9 +48,9 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert("OTP verified successfully! You can now proceed to signup.");
-                // Optionally hide the OTP container or reset the form
-                document.getElementById("signupButton").style.display = "inline"; // Show signup button
+                // Enable the Signup button and show success message
+                document.getElementById("signupButton").style.display = "block";
+                alert("OTP verified successfully!");
             } else {
                 alert(`Failed to verify OTP. ${data.message}`);
             }
@@ -60,15 +59,6 @@ document.addEventListener('DOMContentLoaded', function () {
             console.error('Error:', error);
             alert("An error occurred while verifying OTP. Please try again later.");
         });
-    }
-
-    // Function to resend OTP
-    function resendOTP() {
-        // Reset the OTP field
-        document.getElementById("otp").value = "";
-
-        // Call the function to generate OTP and show the OTP field
-        generateOTPAndShowField();
     }
 
     // Function to attempt signup
@@ -91,20 +81,20 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(data => {
             if (data.success) {
                 alert("Signup successful!");
-                window.location.href = "/login";  // Redirect to login page
+                window.location.href = "/login";  // Redirect to the login page
             } else {
                 alert(`Failed to signup. ${data.message}`);
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert("An error occurred during signup. Please try again later.");
+            alert("An error occurred while signing up. Please try again later.");
         });
     }
 
     // Attach event listeners to buttons
     document.getElementById("generateOTPButton").addEventListener("click", generateOTPAndShowField);
     document.getElementById("verifyOTPButton").addEventListener("click", verifyOTP);
-    document.getElementById("resendOTPButton").addEventListener("click", resendOTP);
-    document.getElementById("signupButton").addEventListener("click", attemptSignup);
+    document.getElementById("resendOTPButton").addEventListener("click", generateOTPAndShowField);  // Fixed resend OTP function
+    document.getElementById("signupButton").addEventListener("click", attemptSignup);  // Added Signup button event listener
 });
