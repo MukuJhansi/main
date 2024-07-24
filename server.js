@@ -47,8 +47,8 @@ app.get('/bamlaJiSmash', (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'Rickroll.html'));
 });
 
-// Serve the devlopment page
-app.get('/devlopment', (req, res) => {
+// Serve the development page
+app.get('/development', (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'devlopment.html'));
 });
 
