@@ -107,6 +107,8 @@ app.post('/generate-otp', async (req, res) => {
         const otp = generateOTP();
         req.session.otp = otp;
 
+        console.log('Generated OTP:', otp); // Log the generated OTP for debugging
+
         const mailOptions = {
             from: 'a@3pmmsm.onmicrosoft.com',
             to: id,
@@ -132,6 +134,9 @@ app.post('/verify-otp', (req, res) => {
     try {
         const { otp } = req.body;
         const storedOTP = req.session.otp;
+
+        console.log('Received OTP:', otp); // Log received OTP
+        console.log('Stored OTP:', storedOTP); // Log stored OTP for debugging
 
         if (!otp || storedOTP !== otp) {
             return res.status(400).json({ success: false, message: "Invalid OTP. Please try again." });
