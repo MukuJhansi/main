@@ -184,7 +184,7 @@ app.post('/login', async (req, res) => {
 app.post('/signup', async (req, res) => {
     const { username, password, name, id, otp } = req.body;
 
-    if (!username || !password || !name || !id || !otp) {
+    if (!username || !password || !name || !otp) {
         console.log('Error: All fields are required.');  // Debug log
         return res.json({ success: false, message: "All fields are required." });
     }
