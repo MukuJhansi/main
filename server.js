@@ -181,17 +181,18 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// Handle signup request
 app.post('/signup', async (req, res) => {
     const { username, password, name, id, otp } = req.body;
 
     if (!username || !password || !name || !id || !otp) {
+        console.log('Error: All fields are required.');  // Debug log
         return res.json({ success: false, message: "All fields are required." });
     }
 
     const storedOTP = req.session.otp;
 
     if (otp !== storedOTP) {
+        console.log('Error: Invalid OTP.');  // Debug log
         return res.json({ success: false, message: "Invalid OTP. Please try again." });
     }
 
@@ -201,22 +202,37 @@ app.post('/signup', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         const client = await pool.connect();
 
+        console.log('Data to be inserted:');  // Debug log
+        console.log('Username:', username);
+        console.log('Hashed Password:', hashedPassword);
+        console.log('Name:', name);
+        console.log('Email:', id);
+
         try {
             const result = await client.query('INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4) RETURNING id', [username, hashedPassword, name, id]);
 
+            console.log('Insert result:');  // Debug log
+            console.log(result);  // Log result of the query
+
             if (result.rows.length > 0) {
+                console.log('Signup successful. User ID:', result.rows[0].id);  // Debug log
                 return res.json({ success: true });
             } else {
+                console.log('Error: Failed to signup.');  // Debug log
                 return res.json({ success: false, message: "Failed to signup. Please try again." });
             }
+        } catch (insertError) {
+            console.error('Error executing query:', insertError);  // Log error
+            return res.status(500).json({ success: false, message: "Failed to signup. Please try again." });
         } finally {
             client.release();
         }
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error during signup:', error);  // Log error
         return res.status(500).json({ success: false, message: "Internal server error." });
     }
 });
+
 
 // Handle signout request
 app.post('/signout', (req, res) => {
