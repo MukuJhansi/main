@@ -261,6 +261,14 @@ h1 {
     transform: translateY(-50%);
 }
 
+.rick{
+    text-decoration: none;
+    color: #333;
+    padding: 5px;
+    outline: 1.2px;
+    margin: 10px;
+}
+
 @media screen and (max-weight: 320px) {
     nav {
         flex-direction: column;
