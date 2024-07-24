@@ -147,7 +147,7 @@ app.post('/verify-otp', (req, res) => {
     }
 });
 
-// Handle login request
+//Login
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
 
@@ -164,7 +164,10 @@ app.post('/login', async (req, res) => {
         }
 
         const hashedPassword = result.rows[0].password;
+        console.log(`Password from DB: ${hashedPassword}`);  // Log password from DB
         const passwordMatch = await bcrypt.compare(password, hashedPassword);
+
+        console.log(`Password match: ${passwordMatch}`);  // Log result of password comparison
 
         if (passwordMatch) {
             req.session.userId = result.rows[0].id;
