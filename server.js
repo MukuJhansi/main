@@ -2,11 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
-const mysql = require('mysql2/promise');
-const session = require('cookie-session');
+const { Pool } = require('pg');
+const session = require('express-session');
+const PgSession = require('connect-pg-simple')(session);
 const path = require('path');
 const nodemailer = require('nodemailer');
-const { time, timeLog, timeEnd } = require('console');
 
 const app = express();
 const PORT = 443;
@@ -16,24 +16,32 @@ app.use('/styles', express.static(path.join(__dirname, 'styles')));
 app.use('/pic/', express.static(path.join(__dirname, 'pic')));
 app.use('/video/', express.static(path.join(__dirname, 'video')));
 app.use('/', express.static(path.join(__dirname, 'home')));
-app.use('/html/', express.static(path.join(__dirname, 'html')))
-app.use('/script/', express.static(path.join(__dirname, 'scripts')))
+app.use('/html/', express.static(path.join(__dirname, 'html')));
+app.use('/script/', express.static(path.join(__dirname, 'scripts')));
 
 app.use(bodyParser.json());
 app.use(cors());
+
 const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '12345',
-    database: 'userid',
+    user: 'user_pnj7_user',
+    host: 'dpg-cqgfq62ju9rs73cdicu0-a',
+    database: 'user_pnj7',
+    password: 'c2c6apNS6pCoyYRdv5eGqJzoGf78ptLN',
+    port: 5432,
 };
 
+const pool = new Pool(dbConfig);
+
 app.use(session({
+    store: new PgSession({
+        pool: pool,
+        tableName: 'session' // Use another table-name than the default "session" one
+    }),
     secret: 'GRP"mFa`wL9?D%X]etH>k#',
     resave: true,
-    saveUninitialized: true,
+    saveUninitialized: false,
     cookie: {
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
     },
 }));
 
