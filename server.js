@@ -104,24 +104,28 @@ app.post('/generate-otp', async (req, res) => {
         }
 
         const otp = generateOTP();
-        req.session.otp = otp;
 
-        console.log('Generated OTP:', otp);  // Debug log
-        console.log('Stored OTP in session:', req.session.otp);  // Debug log
-
-        const mailOptions = {
-            from: 'a@3pmmsm.onmicrosoft.com',
-            to: id,
-            subject: 'Verification OTP',
-            text: `Your OTP for registration is: ${otp}`,
-        };
-
+        const client = await pool.connect();
         try {
-            await transporter.sendMail(mailOptions);
-            res.json({ success: true, otp }); // Include OTP in the response
-        } catch (emailError) {
-            console.error('Error sending OTP:', emailError);
-            res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
+            // Insert OTP into the database
+            await client.query('INSERT INTO otps (email, otp) VALUES ($1, $2)', [id, otp]);
+
+            const mailOptions = {
+                from: 'a@3pmmsm.onmicrosoft.com',
+                to: id,
+                subject: 'Verification OTP',
+                text: `Your OTP for registration is: ${otp}`,
+            };
+
+            try {
+                await transporter.sendMail(mailOptions);
+                res.json({ success: true, otp });
+            } catch (emailError) {
+                console.error('Error sending OTP:', emailError);
+                res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
+            }
+        } finally {
+            client.release();
         }
     } catch (error) {
         console.error('Error in /generate-otp:', error);
@@ -130,22 +134,30 @@ app.post('/generate-otp', async (req, res) => {
 });
 
 // Handle OTP verification
-app.post('/verify-otp', (req, res) => {
+app.post('/verify-otp', async (req, res) => {
     try {
-        const { otp } = req.body;
-        const storedOTP = req.session.otp;
+        const { email, otp } = req.body;
 
-        console.log('Received OTP:', otp); // Log received OTP
-        console.log('Stored OTP:', storedOTP); // Log stored OTP for debugging
-
-        if (!otp || storedOTP !== otp) {
-            return res.status(400).json({ success: false, message: "Invalid OTP. Please try again." });
+        if (!email || !otp) {
+            return res.status(400).json({ success: false, message: "Email and OTP are required." });
         }
 
-        // Clear the OTP from session after successful verification
-        delete req.session.otp;
+        const client = await pool.connect();
+        try {
+            // Check OTP in the database
+            const result = await client.query('SELECT otp FROM otps WHERE email = $1 ORDER BY created_at DESC LIMIT 1', [email]);
 
-        return res.json({ success: true });
+            if (result.rows.length === 0 || result.rows[0].otp !== otp) {
+                return res.status(400).json({ success: false, message: "Invalid OTP. Please try again." });
+            }
+
+            // Optionally, delete the OTP from the database after successful verification
+            await client.query('DELETE FROM otps WHERE email = $1 AND otp = $2', [email, otp]);
+
+            res.json({ success: true });
+        } finally {
+            client.release();
+        }
     } catch (error) {
         console.error('Error in /verify-otp:', error);
         return res.status(500).json({ success: false, message: "Internal server error during OTP verification." });
