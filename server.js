@@ -14,6 +14,7 @@ const PORT = 800;
 app.use(express.static('public'));
 app.use('/styles', express.static(path.join(__dirname, 'styles')));
 app.use('/pic/', express.static(path.join(__dirname, 'pic')));
+app.use('/video/', express.static(path.join(__dirname, 'video')));
 app.use('/', express.static(path.join(__dirname, 'home')));
 app.use('/html/', express.static(path.join(__dirname, 'html')))
 app.use('/script/', express.static(path.join(__dirname, 'scripts')))
@@ -39,6 +40,11 @@ app.use(session({
 // Serve the home page
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'index.html'));
+});
+
+// Serve the Rickroll page
+app.get('/bamlaJiSmash', (req, res) => {
+    res.sendFile(path.join(__dirname, 'html', 'Rickroll.html'));
 });
 
 // Serve the devlopment page
