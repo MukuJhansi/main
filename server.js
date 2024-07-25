@@ -142,9 +142,6 @@ app.post('/generate-otp', async (req, res) => {
                 req.session.mobile = mobile;
                 req.session.password = password;
 
-                // Log session data
-                console.log('Session data after OTP generation:', req.session);
-
                 res.json({ success: true, otp });
             } catch (emailError) {
                 console.error('Error sending OTP:', emailError);
@@ -176,9 +173,6 @@ app.post('/verify-otp', async (req, res) => {
             if (!storedOTP || !email) {
                 return res.status(400).json({ success: false, message: "OTP or email is missing in the session." });
             }
-
-            // Log session data
-            console.log('Session data during OTP verification:', req.session);
 
             // Check if the provided OTP matches the stored OTP
             if (otp !== storedOTP) {
@@ -255,16 +249,12 @@ app.post('/signup', async (req, res) => {
     const { username, password, name, id, otp } = req.body;
 
     if (!username || !password || !name || !otp) {
-        console.log('Error: All fields are required.');  // Debug log
         return res.json({ success: false, message: "All fields are required." });
     }
 
     const storedOTP = req.session.otp;
-    console.log('Stored OTP:', storedOTP);  // Debug log
-    console.log('Provided OTP:', otp);  // Debug log
 
     if (otp !== storedOTP) {
-        console.log('Error: Invalid OTP.');  // Debug log
         return res.json({ success: false, message: "Invalid OTP. Please try again." });
     }
 
@@ -274,18 +264,11 @@ app.post('/signup', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         const client = await pool.connect();
 
-        console.log('Data to be inserted:');  // Debug log
-        console.log('Username:', username);
-        console.log('Hashed Password:', hashedPassword);
-        console.log('Name:', name);
-        console.log('Email:', id);
-
         try {
             // Check if the user already exists
             const result = await client.query('SELECT * FROM users WHERE email = $1', [id]);
 
             if (result.rows.length > 0) {
-                console.log('Error: Email is already registered.');  // Debug log
                 return res.json({ success: false, message: "Email is already registered." });
             }
 
@@ -294,7 +277,6 @@ app.post('/signup', async (req, res) => {
                 'INSERT INTO users (username, password, name, email, mobile) VALUES ($1, $2, $3, $4, $5) RETURNING id',
                 [username, hashedPassword, name, id, req.session.mobile]
             );
-            console.log('Insert result:', insertResult);  // Debug log
 
             if (insertResult.rows.length > 0) {
                 return res.json({ success: true });
