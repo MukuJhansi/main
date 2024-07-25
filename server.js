@@ -230,7 +230,7 @@ app.post('/login', async (req, res) => {
             return res.json({ success: false, message: "Invalid username or password." });
         }
 
-        const hashedPassword = result.rows[0].password;
+        const hashedPassword = await bcrypt.hash(password, 10);
         const passwordMatch = await bcrypt.compare(password, hashedPassword);
 
         if (passwordMatch) {
