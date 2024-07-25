@@ -1,6 +1,5 @@
-// login.js
 function attemptLogin() {
-    let username = document.getElementById("username").value;
+    let email = document.getElementById("username").value; // Ensure field ID matches
     let password = document.getElementById("password").value;
 
     // Make an AJAX request to the server
@@ -9,7 +8,7 @@ function attemptLogin() {
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ email, password }), // Ensure keys match server expectations
     })
     .then(response => {
         if (!response.ok) {
