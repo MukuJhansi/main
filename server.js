@@ -97,41 +97,59 @@ app.get('/dashboard', isAuthenticated, (req, res) => {
 
 app.post('/generate-otp', async (req, res) => {
     try {
-        const { name, id, mobile, password } = req.body;
-
-        if (!name || !id || !mobile || !password) {
-            return res.status(400).json({ success: false, message: "All fields are required." });
-        }
-
-        const otp = generateOTP();
-
-        const client = await pool.connect();
+      const { name, id, mobile, password } = req.body;
+  
+      if (!name || !id || !mobile || !password) {
+        return res.status(400).json({ success: false, message: "All fields are required." });
+      }
+  
+      const otp = generateOTP();
+  
+      const client = await pool.connect();
+      try {
+        // Insert OTP into the database, handling the case where the email already exists
         try {
-            // Insert OTP into the database
-            await client.query('INSERT INTO otps (email, otp) VALUES ($1, $2)', [id, otp]);
-
-            const mailOptions = {
-                from: 'a@3pmmsm.onmicrosoft.com',
-                to: id,
-                subject: 'Verification OTP',
-                text: `Your OTP for registration is: ${otp}`,
-            };
-
-            try {
-                await transporter.sendMail(mailOptions);
-                res.json({ success: true, otp });
-            } catch (emailError) {
-                console.error('Error sending OTP:', emailError);
-                res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
-            }
-        } finally {
-            client.release();
+          await client.query(
+            'INSERT INTO otps (email, otp, created_at) VALUES ($1, $2, NOW())',
+            [id, otp]
+          );
+        } catch (dbError) {
+          if (dbError.code === '23505') { // Unique violation
+            // Handle the case where the email already exists
+            await client.query(
+              'UPDATE otps SET otp = $1, created_at = NOW() WHERE email = $2',
+              [otp, id]
+            );
+          } else {
+            throw dbError;
+          }
         }
+  
+        const mailOptions = {
+          from: 'a@3pmmsm.onmicrosoft.com',
+          to: id,
+          subject: 'Verification OTP',
+          text: `Your OTP for registration is: ${otp}`,
+        };
+  
+        try {
+          await transporter.sendMail(mailOptions);
+          // Store the OTP in the session
+          req.session.otp = otp;
+          res.json({ success: true, otp });
+        } catch (emailError) {
+          console.error('Error sending OTP:', emailError);
+          res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
+        }
+      } finally {
+        client.release();
+      }
     } catch (error) {
-        console.error('Error in /generate-otp:', error);
-        return res.status(500).json({ success: false, message: "Internal server error during OTP generation." });
+      console.error('Error in /generate-otp:', error);
+      return res.status(500).json({ success: false, message: "Internal server error during OTP generation." });
     }
-});
+  });
+  
 
 // Handle OTP verification
 app.post('/verify-otp', async (req, res) => {
