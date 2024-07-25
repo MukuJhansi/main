@@ -24,7 +24,6 @@ const dbConfig = {
 
 const pool = new Pool(dbConfig);
 
-// Session store configuration
 app.use(session({
     store: new pgSession({
         pool, // Connection pool
@@ -33,7 +32,12 @@ app.use(session({
     secret: 'GRP"mFa`wL9?D%X]etH>k#',
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 } // 1 week
+    cookie: {
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+        secure: true, // Ensure cookies are sent only over HTTPS
+        httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
+        sameSite: 'Strict' // Ensures cookies are only sent for same-site requests
+    }
 }));
 
 app.use(express.static('public'));
