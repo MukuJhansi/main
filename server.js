@@ -216,32 +216,40 @@ app.post('/verify-otp', async (req, res) => {
 
 // Handle login
 app.post('/login', async (req, res) => {
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-        return res.json({ success: false, message: "Username and password are required." });
-    }
-
     try {
-        const client = await pool.connect();
-        const result = await client.query('SELECT id, password FROM users WHERE username = $1', [username]);
+        const { email, password } = req.body;
 
-        if (result.rows.length === 0) {
-            return res.json({ success: false, message: "Invalid username or password." });
+        if (!email || !password) {
+            return res.status(400).json({ success: false, message: "Email and password are required." });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const passwordMatch = await bcrypt.compare(password, hashedPassword);
+        const client = await pool.connect();
+        try {
+            // Fetch user from database
+            const { rows } = await client.query('SELECT * FROM users WHERE email = $1', [email]);
 
-        if (passwordMatch) {
-            req.session.userId = result.rows[0].id;
-            return res.json({ success: true });
-        } else {
-            return res.json({ success: false, message: "Invalid username or password." });
+            if (rows.length === 0) {
+                return res.status(401).json({ success: false, message: "Invalid email or password." });
+            }
+
+            const user = rows[0];
+
+            // Compare the provided password with the stored hashed password
+            const isMatch = await bcrypt.compare(password, user.password);
+
+            if (!isMatch) {
+                return res.status(401).json({ success: false, message: "Invalid email or password." });
+            }
+
+            // Successful login
+            req.session.userId = user.id; // Store user ID in session
+            res.json({ success: true, message: "Login successful!" });
+        } finally {
+            client.release();
         }
     } catch (error) {
-        console.error('Error:', error);
-        return res.status(500).json({ success: false, message: "Internal server error." });
+        console.error('Error in /login:', error);
+        res.status(500).json({ success: false, message: "Internal server error during login." });
     }
 });
 
