@@ -162,33 +162,42 @@ app.post('/verify-otp', async (req, res) => {
         try {
             const storedOTP = req.session.otp;
             const email = req.session.email;
-            console.log('Session data during OTP verification:', req.session); // Debugging
 
             if (!storedOTP || !email) {
                 return res.status(400).json({ success: false, message: "OTP or email is missing in the session." });
             }
 
             if (otp !== storedOTP) {
-                console.log('Stored OTP:', storedOTP, 'Provided OTP:', otp); // Debugging
                 return res.status(400).json({ success: false, message: "Invalid OTP." });
             }
 
+            // Check if the email is already registered
             const { rows: userRows } = await client.query('SELECT * FROM users WHERE email = $1', [email]);
 
             if (userRows.length > 0) {
+                // Email is already registered
+                req.session.otp = null;
+                req.session.email = null;
+                req.session.name = null;
+                req.session.mobile = null;
+                req.session.password = null;
                 return res.json({ success: true, message: "Email is already registered. You can log in." });
             }
 
+            // Retrieve additional user data from session
             const { name, mobile, password } = req.session;
             const hashedPassword = await bcrypt.hash(password, 10);
 
+            // Insert new user into the database
             await client.query(
                 'INSERT INTO users (username, password, name, email, mobile) VALUES ($1, $2, $3, $4, $5)',
                 [name, hashedPassword, name, email, mobile]
             );
 
+            // Delete OTP from the database
             await client.query('DELETE FROM otps WHERE email = $1', [email]);
 
+            // Clear OTP and user data from session
             req.session.otp = null;
             req.session.email = null;
             req.session.name = null;
@@ -204,6 +213,7 @@ app.post('/verify-otp', async (req, res) => {
         return res.status(500).json({ success: false, message: "Internal server error during OTP verification." });
     }
 });
+
 
 // Handle login
 app.post('/login', async (req, res) => {
