@@ -112,6 +112,7 @@ app.post('/generate-otp', async (req, res) => {
         const client = await pool.connect();
         try {
             const otp = generateOTP();
+
             const { rows } = await client.query('SELECT * FROM otps WHERE email = $1', [id]);
 
             if (rows.length > 0) {
@@ -134,7 +135,7 @@ app.post('/generate-otp', async (req, res) => {
                 req.session.name = name;
                 req.session.mobile = mobile;
                 req.session.password = password;
-                console.log('Session data after OTP generation:', req.session);
+                console.log('Session data after OTP generation:', req.session); // Debugging
                 res.json({ success: true, otp });
             } catch (emailError) {
                 console.error('Error sending OTP:', emailError);
@@ -161,13 +162,14 @@ app.post('/verify-otp', async (req, res) => {
         try {
             const storedOTP = req.session.otp;
             const email = req.session.email;
-            console.log('Session data during OTP verification:', req.session);
+            console.log('Session data during OTP verification:', req.session); // Debugging
 
             if (!storedOTP || !email) {
                 return res.status(400).json({ success: false, message: "OTP or email is missing in the session." });
             }
 
             if (otp !== storedOTP) {
+                console.log('Stored OTP:', storedOTP, 'Provided OTP:', otp); // Debugging
                 return res.status(400).json({ success: false, message: "Invalid OTP." });
             }
 
@@ -202,7 +204,6 @@ app.post('/verify-otp', async (req, res) => {
         return res.status(500).json({ success: false, message: "Internal server error during OTP verification." });
     }
 });
-
 
 // Handle login
 app.post('/login', async (req, res) => {
