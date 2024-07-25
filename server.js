@@ -276,12 +276,22 @@ app.post('/signup', async (req, res) => {
         console.log('Email:', id);
 
         try {
-            const result = await client.query(
-                'INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4) RETURNING id',
-                [username, hashedPassword, name, id]
-            );
-            console.log('Insert result:', result);  // Debug log
+            // Check if the user already exists
+            const result = await client.query('SELECT * FROM users WHERE email = $1', [id]);
+
             if (result.rows.length > 0) {
+                console.log('Error: Email is already registered.');  // Debug log
+                return res.json({ success: false, message: "Email is already registered." });
+            }
+
+            // Insert new user into the database
+            const insertResult = await client.query(
+                'INSERT INTO users (username, password, name, email, mobile) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+                [username, hashedPassword, name, id, req.session.mobile]
+            );
+            console.log('Insert result:', insertResult);  // Debug log
+
+            if (insertResult.rows.length > 0) {
                 return res.json({ success: true });
             } else {
                 return res.json({ success: false, message: "Failed to signup. Please try again." });
