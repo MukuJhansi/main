@@ -7,6 +7,8 @@ const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
 const nodemailer = require('nodemailer');
+const crypto = require('crypto');
+
 
 const app = express();
 const PORT = 443;
@@ -286,6 +288,96 @@ app.post('/signup', async (req, res) => {
     } catch (error) {
         console.error('Error during signup:', error);  // Log error
         return res.status(500).json({ success: false, message: "Internal server error." });
+    }
+});
+
+// Route to request password reset
+app.post('/request-password-reset', async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ success: false, message: "Email is required." });
+        }
+
+        const client = await pool.connect();
+        try {
+            const resetToken = crypto.randomBytes(32).toString('hex');
+            const resetTokenExpiry = new Date(Date.now() + 3600000); // Token valid for 1 hour
+
+            // Insert or update reset token in the database
+            await client.query(
+                'INSERT INTO password_resets (email, token, expiry) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET token = $2, expiry = $3',
+                [email, resetToken, resetTokenExpiry]
+            );
+
+            const resetLink = `http://gunman.is-a.dev/reset-password?token=${resetToken}`;
+
+            const mailOptions = {
+                from: 'a@3pmmsm.onmicrosoft.com',
+                to: email,
+                subject: 'Password Reset Request',
+                text: `You requested a password reset. Click the following link to reset your password: ${resetLink}`,
+            };
+
+            try {
+                await transporter.sendMail(mailOptions);
+                res.json({ success: true, message: "Password reset link sent to your email." });
+            } catch (emailError) {
+                console.error('Error sending reset email:', emailError);
+                res.status(500).json({ success: false, message: "Failed to send reset email. Please try again." });
+            }
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('Error in /request-password-reset:', error);
+        return res.status(500).json({ success: false, message: "Internal server error during password reset request." });
+    }
+});
+
+// Route to reset password
+app.post('/reset-password', async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+
+        if (!token || !newPassword) {
+            return res.status(400).json({ success: false, message: "Token and new password are required." });
+        }
+
+        const client = await pool.connect();
+        try {
+            // Validate the token
+            const { rows: resetRows } = await client.query(
+                'SELECT * FROM password_resets WHERE token = $1 AND expiry > NOW()',
+                [token]
+            );
+
+            if (resetRows.length === 0) {
+                return res.status(400).json({ success: false, message: "Invalid or expired token." });
+            }
+
+            const { email } = resetRows[0];
+
+            // Hash the new password
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+            // Update the user's password
+            await client.query(
+                'UPDATE users SET password = $1 WHERE email = $2',
+                [hashedPassword, email]
+            );
+
+            // Delete the reset token from the database
+            await client.query('DELETE FROM password_resets WHERE token = $1', [token]);
+
+            res.json({ success: true, message: "Password reset successful." });
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('Error in /reset-password:', error);
+        return res.status(500).json({ success: false, message: "Internal server error during password reset." });
     }
 });
 
