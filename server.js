@@ -396,3 +396,19 @@ app.get('/dashboard', isAuthenticated, (req, res) => {
 app.get('/payment', isAuthenticated, (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'payment.html'));
 });
+
+app.listen(PORT, '0.0.0.0', (err) => {
+    if (err) {
+        console.error('Server startup error:', err);
+    } else {
+        console.log(`Server is running on http://0.0.0.0:${PORT}`);
+    }
+});
+
+function isAuthenticated(req, res, next) {
+    if (req.session.userId) {
+        next();
+    } else {
+        res.redirect('/login');
+    }
+}
