@@ -97,82 +97,109 @@ app.get('/dashboard', isAuthenticated, (req, res) => {
 
 app.post('/generate-otp', async (req, res) => {
     try {
-      const { name, id, mobile, password } = req.body;
-  
-      if (!name || !id || !mobile || !password) {
-        return res.status(400).json({ success: false, message: "All fields are required." });
-      }
-  
-      const otp = generateOTP();
-  
-      const client = await pool.connect();
-      try {
-        // Insert OTP into the database, handling the case where the email already exists
-        try {
-          await client.query(
-            'INSERT INTO otps (email, otp, created_at) VALUES ($1, $2, NOW())',
-            [id, otp]
-          );
-        } catch (dbError) {
-          if (dbError.code === '23505') { // Unique violation
-            // Handle the case where the email already exists
-            await client.query(
-              'UPDATE otps SET otp = $1, created_at = NOW() WHERE email = $2',
-              [otp, id]
-            );
-          } else {
-            throw dbError;
-          }
-        }
-  
-        const mailOptions = {
-          from: 'a@3pmmsm.onmicrosoft.com',
-          to: id,
-          subject: 'Verification OTP',
-          text: `Your OTP for registration is: ${otp}`,
-        };
-  
-        try {
-          await transporter.sendMail(mailOptions);
-          // Store the OTP in the session
-          req.session.otp = otp;
-          res.json({ success: true, otp });
-        } catch (emailError) {
-          console.error('Error sending OTP:', emailError);
-          res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
-        }
-      } finally {
-        client.release();
-      }
-    } catch (error) {
-      console.error('Error in /generate-otp:', error);
-      return res.status(500).json({ success: false, message: "Internal server error during OTP generation." });
-    }
-  });
-  
+        const { name, id, mobile, password } = req.body;
 
-// Handle OTP verification
-app.post('/verify-otp', async (req, res) => {
-    try {
-        const { email, otp } = req.body;
-
-        if (!email || !otp) {
-            return res.status(400).json({ success: false, message: "Email and OTP are required." });
+        if (!name || !id || !mobile || !password) {
+            return res.status(400).json({ success: false, message: "All fields are required." });
         }
 
         const client = await pool.connect();
         try {
-            // Check OTP in the database
-            const result = await client.query('SELECT otp FROM otps WHERE email = $1 ORDER BY created_at DESC LIMIT 1', [email]);
+            // Generate a new OTP
+            const otp = generateOTP();
 
-            if (result.rows.length === 0 || result.rows[0].otp !== otp) {
-                return res.status(400).json({ success: false, message: "Invalid OTP. Please try again." });
+            // Check if the email already exists in the OTP table
+            const { rows } = await client.query('SELECT * FROM otps WHERE email = $1', [id]);
+
+            if (rows.length > 0) {
+                // Email already exists, update the OTP
+                await client.query('UPDATE otps SET otp = $1, created_at = NOW() WHERE email = $2', [otp, id]);
+            } else {
+                // Email does not exist, insert new OTP
+                await client.query('INSERT INTO otps (email, otp, created_at) VALUES ($1, $2, NOW())', [id, otp]);
             }
 
-            // Optionally, delete the OTP from the database after successful verification
-            await client.query('DELETE FROM otps WHERE email = $1 AND otp = $2', [email, otp]);
+            // Send OTP email
+            const mailOptions = {
+                from: 'a@3pmmsm.onmicrosoft.com',
+                to: id,
+                subject: 'Verification OTP',
+                text: `Your OTP for registration is: ${otp}`,
+            };
 
-            res.json({ success: true });
+            try {
+                await transporter.sendMail(mailOptions);
+                // Store the OTP in the session
+                req.session.otp = otp;
+                res.json({ success: true, otp });
+            } catch (emailError) {
+                console.error('Error sending OTP:', emailError);
+                res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
+            }
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('Error in /generate-otp:', error);
+        return res.status(500).json({ success: false, message: "Internal server error during OTP generation." });
+    }
+});
+
+app.post('/verify-otp', async (req, res) => {
+    try {
+        const { otp } = req.body;
+
+        if (!otp) {
+            return res.status(400).json({ success: false, message: "OTP is required." });
+        }
+
+        const client = await pool.connect();
+        try {
+            // Retrieve the OTP and email from the session
+            const storedOTP = req.session.otp;
+            const email = req.session.email;
+
+            if (!storedOTP || !email) {
+                return res.status(400).json({ success: false, message: "OTP or email is missing in the session." });
+            }
+
+            // Check if the provided OTP matches the stored OTP
+            if (otp !== storedOTP) {
+                return res.status(400).json({ success: false, message: "Invalid OTP." });
+            }
+
+            // Check if the email is already registered
+            const { rows: userRows } = await client.query('SELECT * FROM users WHERE email = $1', [email]);
+
+            if (userRows.length > 0) {
+                // Email is already registered
+                return res.json({ success: true, message: "Email is already registered. You can log in." });
+            }
+
+            // Retrieve additional user data from session
+            const { name, mobile, password } = req.session;
+
+            // Hash the password
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            // Insert new user into the database
+            await client.query(
+                'INSERT INTO users (username, password, name, email, mobile) VALUES ($1, $2, $3, $4, $5)',
+                [name, hashedPassword, name, email, mobile]
+            );
+
+            // Delete OTP from the database
+            await client.query('DELETE FROM otps WHERE email = $1', [email]);
+
+            // Clear OTP and user data from session
+            req.session.otp = null;
+            req.session.email = null;
+            req.session.name = null;
+            req.session.mobile = null;
+            req.session.password = null;
+
+            // Respond with success
+            return res.json({ success: true, message: "Signup successful!" });
         } finally {
             client.release();
         }
