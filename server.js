@@ -195,7 +195,7 @@ app.post('/login', async (req, res) => {
         const { email, password } = req.body;
 
         if (!email || !password) {
-            console.log('Error: Missing email or password');  // Debug log
+            console.log('Error: Missing email or password');
             return res.status(400).json({ success: false, message: "Email and password are required." });
         }
 
@@ -204,7 +204,7 @@ app.post('/login', async (req, res) => {
             const { rows } = await client.query('SELECT * FROM users WHERE email = $1', [email]);
 
             if (rows.length === 0) {
-                console.log('Error: Invalid email');  // Debug log
+                console.log('Error: Invalid email');
                 return res.status(401).json({ success: false, message: "Invalid email or password." });
             }
 
@@ -212,11 +212,13 @@ app.post('/login', async (req, res) => {
             const isMatch = await bcrypt.compare(password, user.password);
 
             if (!isMatch) {
-                console.log('Error: Invalid password');  // Debug log
+                console.log('Error: Invalid password');
                 return res.status(401).json({ success: false, message: "Invalid email or password." });
             }
 
             req.session.userId = user.id; // Store user ID in session
+            console.log('Session data after login:', req.session); // Debug log
+            
             res.json({ success: true, message: "Login successful!" });
         } finally {
             client.release();
