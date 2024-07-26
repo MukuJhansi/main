@@ -12,17 +12,11 @@ textarea,
 .ddsmoothmenu ul li a {
     font-family: 'Balsamiq Sans', sans-serif !important;
     font-weight: normal;
-    margin: 0;
-    padding: 0;
     overflow-wrap: normal;
     background-color: black;
     color: #fff;
 }
 
-* {
-    margin: 0;
-    padding: 0;
-}
 html::-webkit-scrollbar {
     display: none;
     scroll-behavior: smooth;
