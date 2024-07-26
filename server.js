@@ -157,6 +157,8 @@ app.post('/verify-otp', async (req, res) => {
             return res.status(400).json({ success: false, message: "OTP is required." });
         }
 
+        console.log('Session Data:', req.session); // Debug log to check session data
+
         const client = await pool.connect();
         try {
             const storedOTP = req.session.otp;
@@ -196,6 +198,7 @@ app.post('/verify-otp', async (req, res) => {
         return res.status(500).json({ success: false, message: "Internal server error during OTP verification." });
     }
 });
+
 
 app.post('/login', async (req, res) => {
     try {
