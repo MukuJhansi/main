@@ -4,9 +4,10 @@ const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
 const session = require('express-session');
-const PgSession = require('connect-pg-simple')(session); // Fixed constructor name
+const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
 const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = 443;
@@ -22,20 +23,19 @@ const dbConfig = {
 
 const pool = new Pool(dbConfig);
 
-// Session configuration
 app.use(session({
-    store: new PgSession({
-        pool,
-        tableName: 'session'
+    store: new pgSession({
+        pool, // Connection pool
+        tableName: 'session', // Use another table-name than the default "session" one
     }),
-    secret: process.env.SESSION_SECRET || 'GRP"mFa`wL9?D%X]etH>k#',
+    secret: 'GRP"mFa`wL9?D%X]etH>k#',
     resave: false,
     saveUninitialized: false,
     cookie: {
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-        httpOnly: true,
-        sameSite: 'Strict'
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+        secure: true, // Ensure cookies are sent only over HTTPS
+        httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
+        sameSite: 'Strict', // Ensures cookies are only sent for same-site requests
     }
 }));
 
@@ -50,7 +50,6 @@ app.use('/script/', express.static(path.join(__dirname, 'scripts')));
 app.use(bodyParser.json());
 app.use(cors());
 
-// Email transporter
 const transporter = nodemailer.createTransport({
     host: 'smtp.office365.com',
     port: 587,
@@ -67,23 +66,40 @@ const transporter = nodemailer.createTransport({
     debug: true
 });
 
-// Generate OTP
 function generateOTP() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Serve pages
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'html', 'index.html')));
-app.get('/bamlaJiSmash', (req, res) => res.sendFile(path.join(__dirname, 'html', 'Rickroll.html')));
-app.get('/development', (req, res) => res.sendFile(path.join(__dirname, 'html', 'devlopment.html')));
-app.get('/signup', (req, res) => res.sendFile(path.join(__dirname, 'html', 'signup.html')));
-app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'html', 'login.html')));
-app.get('/dashboard', isAuthenticated, (req, res) => res.sendFile(path.join(__dirname, 'html', 'dashboard.html')));
+// Serve the home page
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'html', 'index.html'));
+});
 
-// Inspect session data
-app.get('/inspect-session', (req, res) => res.json(req.session));
+// Serve the Rickroll page
+app.get('/bamlaJiSmash', (req, res) => {
+    res.sendFile(path.join(__dirname, 'html', 'Rickroll.html'));
+});
 
-// Generate OTP route
+// Serve the development page
+app.get('/development', (req, res) => {
+    res.sendFile(path.join(__dirname, 'html', 'devlopment.html'));
+});
+
+// Serve the signup page
+app.get('/signup', (req, res) => {
+    res.sendFile(path.join(__dirname, 'html', 'signup.html'));
+});
+
+// Serve the login page
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'html', 'login.html'));
+});
+
+// Serve the dashboard page
+app.get('/dashboard', isAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, 'html', 'dashboard.html'));
+});
+
 app.post('/generate-otp', async (req, res) => {
     try {
         const { name, id, mobile, password } = req.body;
@@ -94,15 +110,21 @@ app.post('/generate-otp', async (req, res) => {
 
         const client = await pool.connect();
         try {
+            // Generate a new OTP
             const otp = generateOTP();
+
+            // Check if the email already exists in the OTP table
             const { rows } = await client.query('SELECT * FROM otps WHERE email = $1', [id]);
 
             if (rows.length > 0) {
+                // Email already exists, update the OTP
                 await client.query('UPDATE otps SET otp = $1, created_at = NOW() WHERE email = $2', [otp, id]);
             } else {
+                // Email does not exist, insert new OTP
                 await client.query('INSERT INTO otps (email, otp, created_at) VALUES ($1, $2, NOW())', [id, otp]);
             }
 
+            // Send OTP email
             const mailOptions = {
                 from: 'a@3pmmsm.onmicrosoft.com',
                 to: id,
@@ -112,13 +134,12 @@ app.post('/generate-otp', async (req, res) => {
 
             try {
                 await transporter.sendMail(mailOptions);
+                // Store the OTP in the session
                 req.session.otp = otp;
-                req.session.email = id;
+                req.session.email = id; // Store email for verification
                 req.session.name = name;
                 req.session.mobile = mobile;
                 req.session.password = password;
-
-                console.log('Session after OTP generation:', req.session); // Debug log
 
                 res.json({ success: true, otp });
             } catch (emailError) {
@@ -134,7 +155,6 @@ app.post('/generate-otp', async (req, res) => {
     }
 });
 
-// Verify OTP route
 app.post('/verify-otp', async (req, res) => {
     try {
         const { otp } = req.body;
@@ -145,6 +165,7 @@ app.post('/verify-otp', async (req, res) => {
 
         const client = await pool.connect();
         try {
+            // Retrieve the OTP and email from the session
             const storedOTP = req.session.otp;
             const email = req.session.email;
 
@@ -152,34 +173,36 @@ app.post('/verify-otp', async (req, res) => {
                 return res.status(400).json({ success: false, message: "OTP or email is missing in the session." });
             }
 
+            // Check if the provided OTP matches the stored OTP
             if (otp !== storedOTP) {
                 return res.status(400).json({ success: false, message: "Invalid OTP." });
             }
 
+            // Check if the email is already registered
             const { rows: userRows } = await client.query('SELECT * FROM users WHERE email = $1', [email]);
 
             if (userRows.length > 0) {
+                // Email is already registered
                 return res.json({ success: true, message: "Email is already registered. You can log in." });
             }
 
+            // Retrieve additional user data from session
             const { name, mobile, password } = req.session;
 
+            // Hash the password
             const hashedPassword = await bcrypt.hash(password, 10);
 
+            // Insert new user into the database
             await client.query(
                 'INSERT INTO users (username, password, name, email, mobile) VALUES ($1, $2, $3, $4, $5)',
                 [name, hashedPassword, name, email, mobile]
             );
 
+            // Delete OTP from the database
             await client.query('DELETE FROM otps WHERE email = $1', [email]);
 
-            req.session.destroy((err) => {
-                if (err) {
-                    console.error('Session destroy error:', err);
-                    return res.status(500).json({ success: false, message: "Failed to sign out. Please try again." });
-                }
-                res.json({ success: true, message: "Signup successful!" });
-            });
+            // Respond with success
+            return res.json({ success: true, message: "Signup successful!" });
         } finally {
             client.release();
         }
@@ -189,7 +212,6 @@ app.post('/verify-otp', async (req, res) => {
     }
 });
 
-// Handle login
 app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -201,6 +223,7 @@ app.post('/login', async (req, res) => {
 
         const client = await pool.connect();
         try {
+            // Fetch user from database
             const { rows } = await client.query('SELECT * FROM users WHERE email = $1', [email]);
 
             if (rows.length === 0) {
@@ -209,6 +232,8 @@ app.post('/login', async (req, res) => {
             }
 
             const user = rows[0];
+
+            // Compare the provided password with the stored hashed password
             const isMatch = await bcrypt.compare(password, user.password);
 
             if (!isMatch) {
@@ -216,9 +241,10 @@ app.post('/login', async (req, res) => {
                 return res.status(401).json({ success: false, message: "Invalid email or password." });
             }
 
+            // Successful login
             req.session.userId = user.id; // Store user ID in session
-            console.log('Session data after login:', req.session); // Debug log
-            
+            console.log('Session data after login:', req.session);
+
             res.json({ success: true, message: "Login successful!" });
         } finally {
             client.release();
@@ -229,49 +255,14 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// Handle signup
-app.post('/signup', async (req, res) => {
-    const { username, password, name, id, otp } = req.body;
-
-    if (!username || !password || !name || !otp) {
-        return res.json({ success: false, message: "All fields are required." });
-    }
-
-    try {
-        const client = await pool.connect();
-        try {
-            const { rows } = await client.query('SELECT * FROM otps WHERE email = $1', [id]);
-
-            if (rows.length === 0 || rows[0].otp !== otp) {
-                return res.json({ success: false, message: "Invalid OTP." });
-            }
-
-            const hashedPassword = await bcrypt.hash(password, 10);
-
-            await client.query(
-                'INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4)',
-                [username, hashedPassword, name, id]
-            );
-
-            res.json({ success: true, message: "Signup successful!" });
-        } finally {
-            client.release();
-        }
-    } catch (error) {
-        console.error('Error during signup:', error);
-        res.status(500).json({ success: false, message: "Failed to sign up. Please try again." });
-    }
-});
-
-// Middleware to check authentication
+// Middleware to check if user is authenticated
 function isAuthenticated(req, res, next) {
     if (req.session.userId) {
         return next();
     }
-    res.redirect('/login');
+    res.status(401).json({ success: false, message: "Unauthorized. Please log in." });
 }
 
-// Start server
 app.listen(PORT, () => {
-    console.log(`Server is running on https://localhost:${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
