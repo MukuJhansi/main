@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -8,16 +9,18 @@ const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
+const csurf = require('csurf');
 
 const app = express();
 const PORT = 443;
 
-// Database configuration
+// Database configuration using environment variables
 const dbConfig = {
-    user: 'user_pnj7_user',
-    host: 'dpg-cqgfq62ju9rs73cdicu0-a',
-    database: 'user_pnj7',
-    password: 'c2c6apNS6pCoyYRdv5eGqJzoGf78ptLN',
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_DATABASE,
+    password: process.env.DB_PASSWORD,
     port: 5432,
 };
 
@@ -28,12 +31,12 @@ app.use(session({
         pool, // Connection pool
         tableName: 'session', // Use another table-name than the default "session" one
     }),
-    secret: 'GRP"mFa`wL9?D%X]etH>k#',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
-        secure: true, // Ensure cookies are sent only over HTTPS
+        secure: false, // Change to true if using HTTPS
         httpOnly: true, // Prevents client-side JavaScript from accessing the cookie
         sameSite: 'Strict', // Ensures cookies are only sent for same-site requests
     }
@@ -50,13 +53,23 @@ app.use('/script/', express.static(path.join(__dirname, 'scripts')));
 app.use(bodyParser.json());
 app.use(cors());
 
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+});
+app.use(limiter);
+
+// CSRF protection
+const csrfProtection = csurf({ cookie: true });
+
 const transporter = nodemailer.createTransport({
     host: 'smtp.office365.com',
     port: 587,
     secure: false,
     auth: {
-        user: 'a@3pmmsm.onmicrosoft.com',
-        pass: 'Mukund@123',
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
     },
     tls: {
         ciphers: 'SSLv3',
@@ -67,7 +80,7 @@ const transporter = nodemailer.createTransport({
 });
 
 function generateOTP() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return crypto.randomBytes(3).toString('hex').toUpperCase();
 }
 
 // Serve the home page
@@ -100,7 +113,7 @@ app.get('/dashboard', isAuthenticated, (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'dashboard.html'));
 });
 
-app.post('/generate-otp', async (req, res) => {
+app.post('/generate-otp', csrfProtection, async (req, res) => {
     try {
         const { name, id, mobile, password } = req.body;
 
@@ -126,7 +139,7 @@ app.post('/generate-otp', async (req, res) => {
 
             // Send OTP email
             const mailOptions = {
-                from: 'a@3pmmsm.onmicrosoft.com',
+                from: process.env.EMAIL_USER,
                 to: id,
                 subject: 'Verification OTP',
                 text: `Your OTP for registration is: ${otp}`,
@@ -134,7 +147,7 @@ app.post('/generate-otp', async (req, res) => {
 
             try {
                 await transporter.sendMail(mailOptions);
-                // Store the OTP in the session
+                // Store the OTP and other details in the session
                 req.session.otp = otp;
                 req.session.email = id; // Store email for verification
                 req.session.name = name;
@@ -155,7 +168,7 @@ app.post('/generate-otp', async (req, res) => {
     }
 });
 
-app.post('/verify-otp', async (req, res) => {
+app.post('/verify-otp', csrfProtection, async (req, res) => {
     try {
         const { otp } = req.body;
 
@@ -187,7 +200,9 @@ app.post('/verify-otp', async (req, res) => {
             }
 
             // Retrieve additional user data from session
-            const { name, mobile, password } = req.session;
+            const name = req.session.name;
+            const mobile = req.session.mobile;
+            const password = req.session.password;
 
             // Hash the password
             const hashedPassword = await bcrypt.hash(password, 10);
@@ -212,46 +227,40 @@ app.post('/verify-otp', async (req, res) => {
     }
 });
 
-app.post('/login', async (req, res) => {
+app.post('/login', csrfProtection, async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { id, password } = req.body;
 
-        if (!email || !password) {
-            console.log('Error: Missing email or password');
+        if (!id || !password) {
             return res.status(400).json({ success: false, message: "Email and password are required." });
         }
 
         const client = await pool.connect();
         try {
-            // Fetch user from database
-            const { rows } = await client.query('SELECT * FROM users WHERE email = $1', [email]);
+            const { rows } = await client.query('SELECT * FROM users WHERE email = $1', [id]);
 
             if (rows.length === 0) {
-                console.log('Error: Invalid email');
-                return res.status(401).json({ success: false, message: "Invalid email or password." });
+                return res.status(400).json({ success: false, message: "Invalid email or password." });
             }
 
             const user = rows[0];
+            const passwordMatch = await bcrypt.compare(password, user.password);
 
-            // Compare the provided password with the stored hashed password
-            const isMatch = await bcrypt.compare(password, user.password);
-
-            if (!isMatch) {
-                console.log('Error: Invalid password');
-                return res.status(401).json({ success: false, message: "Invalid email or password." });
+            if (!passwordMatch) {
+                return res.status(400).json({ success: false, message: "Invalid email or password." });
             }
 
-            // Successful login
-            req.session.userId = user.id; // Store user ID in session
-            console.log('Session data after login:', req.session);
+            // Store user ID in the session
+            req.session.userId = user.id;
 
-            res.json({ success: true, message: "Login successful!" });
+            // Respond with success
+            return res.json({ success: true, message: "Login successful!" });
         } finally {
             client.release();
         }
     } catch (error) {
         console.error('Error in /login:', error);
-        res.status(500).json({ success: false, message: "Internal server error during login." });
+        return res.status(500).json({ success: false, message: "Internal server error during login." });
     }
 });
 
