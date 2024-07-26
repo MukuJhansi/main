@@ -114,7 +114,7 @@ app.get('/speech', (req, res) => {
 });
 
 // Serve the DRC page
-app.get('/speech', (req, res) => {
+app.get('/drc', (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'DRC.html'));
 });
 
