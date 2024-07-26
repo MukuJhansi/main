@@ -113,6 +113,11 @@ app.get('/speech', (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'speech.html'));
 });
 
+// Serve the DRC page
+app.get('/speech', (req, res) => {
+    res.sendFile(path.join(__dirname, 'html', 'DRC.html'));
+});
+
 // Serve the dashboard page
 app.get('/dashboard', isAuthenticated, (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'dashboard.html'));
