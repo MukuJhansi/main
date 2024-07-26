@@ -181,9 +181,61 @@ app.post('/generate-otp', csrfProtection, async (req, res) => {
     }
 });
 
-function generateOTP() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-}
+app.post('/generate-otp', csrfProtection, async (req, res) => {
+    try {
+        const { name, id, mobile, password } = req.body;
+
+        // Check if all required fields are provided
+        if (!name || !id || !mobile || !password) {
+            return res.status(400).json({ success: false, message: "All fields are required." });
+        }
+
+        // Connect to the database
+        const client = await pool.connect();
+        try {
+            const otp = generateOTP(); // Generate a new OTP
+
+            // Check if the email already exists in the OTP table
+            const { rows } = await client.query('SELECT * FROM otps WHERE email = $1', [id]);
+
+            if (rows.length > 0) {
+                // Update existing OTP
+                await client.query('UPDATE otps SET otp = $1, created_at = NOW() WHERE email = $2', [otp, id]);
+            } else {
+                // Insert new OTP
+                await client.query('INSERT INTO otps (email, otp, created_at) VALUES ($1, $2, NOW())', [id, otp]);
+            }
+
+            // Prepare and send the OTP email
+            const mailOptions = {
+                from: process.env.EMAIL_USER,
+                to: id,
+                subject: 'Verification OTP',
+                text: `Your OTP for registration is: ${otp}`,
+            };
+
+            await transporter.sendMail(mailOptions); // Send the email
+
+            // Store OTP and details in the session
+            req.session.otp = otp;
+            req.session.email = id;
+            req.session.name = name;
+            req.session.mobile = mobile;
+            req.session.password = password;
+
+            res.json({ success: true, otp }); // Respond with success
+        } catch (dbError) {
+            console.error('Database error:', dbError);
+            res.status(500).json({ success: false, message: "Database error during OTP generation." });
+        } finally {
+            client.release(); // Always release the client
+        }
+    } catch (error) {
+        console.error('Error in /generate-otp:', error);
+        res.status(500).json({ success: false, message: "Internal server error during OTP generation." });
+    }
+});
+
 
 
 app.post('/verify-otp', csrfProtection, async (req, res) => {
