@@ -9,7 +9,6 @@ const path = require('path');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
-
 const app = express();
 const PORT = 443;
 
@@ -111,21 +110,16 @@ app.post('/generate-otp', async (req, res) => {
 
         const client = await pool.connect();
         try {
-            // Generate a new OTP
             const otp = generateOTP();
 
-            // Check if the email already exists in the OTP table
             const { rows } = await client.query('SELECT * FROM otps WHERE email = $1', [id]);
 
             if (rows.length > 0) {
-                // Email already exists, update the OTP
                 await client.query('UPDATE otps SET otp = $1, created_at = NOW() WHERE email = $2', [otp, id]);
             } else {
-                // Email does not exist, insert new OTP
                 await client.query('INSERT INTO otps (email, otp, created_at) VALUES ($1, $2, NOW())', [id, otp]);
             }
 
-            // Send OTP email
             const mailOptions = {
                 from: 'a@3pmmsm.onmicrosoft.com',
                 to: id,
@@ -135,7 +129,6 @@ app.post('/generate-otp', async (req, res) => {
 
             try {
                 await transporter.sendMail(mailOptions);
-                // Store the OTP in the session
                 req.session.otp = otp;
                 req.session.email = id; // Store email for verification
                 req.session.name = name;
@@ -166,7 +159,6 @@ app.post('/verify-otp', async (req, res) => {
 
         const client = await pool.connect();
         try {
-            // Retrieve the OTP and email from the session
             const storedOTP = req.session.otp;
             const email = req.session.email;
 
@@ -174,35 +166,27 @@ app.post('/verify-otp', async (req, res) => {
                 return res.status(400).json({ success: false, message: "OTP or email is missing in the session." });
             }
 
-            // Check if the provided OTP matches the stored OTP
             if (otp !== storedOTP) {
                 return res.status(400).json({ success: false, message: "Invalid OTP." });
             }
 
-            // Check if the email is already registered
             const { rows: userRows } = await client.query('SELECT * FROM users WHERE email = $1', [email]);
 
             if (userRows.length > 0) {
-                // Email is already registered
                 return res.json({ success: true, message: "Email is already registered. You can log in." });
             }
 
-            // Retrieve additional user data from session
             const { name, mobile, password } = req.session;
 
-            // Hash the password
             const hashedPassword = await bcrypt.hash(password, 10);
 
-            // Insert new user into the database
             await client.query(
                 'INSERT INTO users (username, password, name, email, mobile) VALUES ($1, $2, $3, $4, $5)',
                 [name, hashedPassword, name, email, mobile]
             );
 
-            // Delete OTP from the database
             await client.query('DELETE FROM otps WHERE email = $1', [email]);
 
-            // Respond with success
             return res.json({ success: true, message: "Signup successful!" });
         } finally {
             client.release();
@@ -213,8 +197,6 @@ app.post('/verify-otp', async (req, res) => {
     }
 });
 
-
-// Handle login
 app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -226,7 +208,6 @@ app.post('/login', async (req, res) => {
 
         const client = await pool.connect();
         try {
-            // Fetch user from database
             const { rows } = await client.query('SELECT * FROM users WHERE email = $1', [email]);
 
             if (rows.length === 0) {
@@ -236,7 +217,6 @@ app.post('/login', async (req, res) => {
 
             const user = rows[0];
 
-            // Compare the provided password with the stored hashed password
             const isMatch = await bcrypt.compare(password, user.password);
 
             if (!isMatch) {
@@ -244,7 +224,6 @@ app.post('/login', async (req, res) => {
                 return res.status(401).json({ success: false, message: "Invalid email or password." });
             }
 
-            // Successful login
             req.session.userId = user.id; // Store user ID in session
             res.json({ success: true, message: "Login successful!" });
         } finally {
@@ -276,163 +255,99 @@ app.post('/signup', async (req, res) => {
         const client = await pool.connect();
 
         try {
-            // Check if the user already exists
-            const result = await client.query('SELECT * FROM users WHERE email = $1', [id]);
-
-            if (result.rows.length > 0) {
-                return res.json({ success: false, message: "Email is already registered." });
-            }
-
-            // Insert new user into the database
-            const insertResult = await client.query(
-                'INSERT INTO users (username, password, name, email, mobile) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-                [username, hashedPassword, name, id, req.session.mobile]
+            await client.query(
+                'INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4)',
+                [username, hashedPassword, name, id]
             );
 
-            if (insertResult.rows.length > 0) {
-                return res.json({ success: true });
-            } else {
-                return res.json({ success: false, message: "Failed to signup. Please try again." });
-            }
+            res.json({ success: true, message: "Signup successful!" });
         } finally {
             client.release();
         }
     } catch (error) {
-        console.error('Error during signup:', error);  // Log error
-        return res.status(500).json({ success: false, message: "Internal server error." });
+        console.error('Error during signup:', error);
+        res.json({ success: false, message: "Internal server error during signup." });
     }
 });
 
-// Route to request password reset
-app.post('/request-password-reset', async (req, res) => {
-    try {
-        const { email } = req.body;
+app.post('/forgot-password', async (req, res) => {
+    const { email } = req.body;
 
-        if (!email) {
-            return res.status(400).json({ success: false, message: "Email is required." });
-        }
+    if (!email) {
+        return res.status(400).json({ success: false, message: "Email is required." });
+    }
+
+    try {
+        const otp = generateOTP();
 
         const client = await pool.connect();
         try {
-            const resetToken = crypto.randomBytes(32).toString('hex');
-            const resetTokenExpiry = new Date(Date.now() + 3600000); // Token valid for 1 hour
-
-            // Insert or update reset token in the database
-            await client.query(
-                'INSERT INTO password_resets (email, token, expiry) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET token = $2, expiry = $3',
-                [email, resetToken, resetTokenExpiry]
-            );
-
-            const resetLink = `http://gunman.is-a.dev/reset-password?token=${resetToken}`;
+            await client.query('INSERT INTO password_resets (email, otp, created_at) VALUES ($1, $2, NOW()) ON CONFLICT (email) DO UPDATE SET otp = $2, created_at = NOW()', [email, otp]);
 
             const mailOptions = {
                 from: 'a@3pmmsm.onmicrosoft.com',
                 to: email,
-                subject: 'Password Reset Request',
-                text: `You requested a password reset. Click the following link to reset your password: ${resetLink}`,
+                subject: 'Password Reset OTP',
+                text: `Your OTP for password reset is: ${otp}`,
             };
 
             try {
                 await transporter.sendMail(mailOptions);
-                res.json({ success: true, message: "Password reset link sent to your email." });
+                req.session.forgotEmail = email;
+                req.session.forgotOTP = otp;
+                res.json({ success: true, message: "OTP sent to your email." });
             } catch (emailError) {
-                console.error('Error sending reset email:', emailError);
-                res.status(500).json({ success: false, message: "Failed to send reset email. Please try again." });
+                console.error('Error sending OTP:', emailError);
+                res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
             }
         } finally {
             client.release();
         }
     } catch (error) {
-        console.error('Error in /request-password-reset:', error);
-        return res.status(500).json({ success: false, message: "Internal server error during password reset request." });
+        console.error('Error in /forgot-password:', error);
+        res.status(500).json({ success: false, message: "Internal server error during password reset request." });
     }
 });
 
-// Route to reset password
 app.post('/reset-password', async (req, res) => {
+    const { otp, newPassword } = req.body;
+
+    if (!otp || !newPassword) {
+        return res.status(400).json({ success: false, message: "OTP and new password are required." });
+    }
+
+    const storedOTP = req.session.forgotOTP;
+    const email = req.session.forgotEmail;
+
+    if (otp !== storedOTP) {
+        return res.status(400).json({ success: false, message: "Invalid OTP." });
+    }
+
     try {
-        const { token, newPassword } = req.body;
-
-        if (!token || !newPassword) {
-            return res.status(400).json({ success: false, message: "Token and new password are required." });
-        }
-
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
         const client = await pool.connect();
+
         try {
-            // Validate the token
-            const { rows: resetRows } = await client.query(
-                'SELECT * FROM password_resets WHERE token = $1 AND expiry > NOW()',
-                [token]
-            );
+            await client.query('UPDATE users SET password = $1 WHERE email = $2', [hashedPassword, email]);
+            await client.query('DELETE FROM password_resets WHERE email = $1', [email]);
 
-            if (resetRows.length === 0) {
-                return res.status(400).json({ success: false, message: "Invalid or expired token." });
-            }
-
-            const { email } = resetRows[0];
-
-            // Hash the new password
-            const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-            // Update the user's password
-            await client.query(
-                'UPDATE users SET password = $1 WHERE email = $2',
-                [hashedPassword, email]
-            );
-
-            // Delete the reset token from the database
-            await client.query('DELETE FROM password_resets WHERE token = $1', [token]);
-
-            res.json({ success: true, message: "Password reset successful." });
+            res.json({ success: true, message: "Password reset successful!" });
         } finally {
             client.release();
         }
     } catch (error) {
         console.error('Error in /reset-password:', error);
-        return res.status(500).json({ success: false, message: "Internal server error during password reset." });
-    }
-});
-
-// Handle signout request
-app.post('/signout', (req, res) => {
-    req.session.destroy((err) => {
-        if (err) {
-            console.error('Session destroy error:', err);
-            return res.status(500).json({ success: false, message: "Failed to sign out. Please try again." });
-        }
-        res.json({ success: true, message: "Sign out successful." });
-    });
-});
-
-// Middleware to check authentication
-function isAuthenticated(req, res, next) {
-    if (req.session.userId) {
-        next();
-    } else {
-        res.redirect('/login');
-    }
-}
-
-app.get('/dashboard', isAuthenticated, (req, res) => {
-    res.sendFile(path.join(__dirname, 'html', 'dashboard.html'));
-});
-
-app.get('/payment', isAuthenticated, (req, res) => {
-    res.sendFile(path.join(__dirname, 'html', 'payment.html'));
-});
-
-app.listen(PORT, '0.0.0.0', (err) => {
-    if (err) {
-        console.error('Server startup error:', err);
-    } else {
-        console.log(`Server is running on http://0.0.0.0:${PORT}`);
+        res.status(500).json({ success: false, message: "Internal server error during password reset." });
     }
 });
 
 function isAuthenticated(req, res, next) {
     if (req.session.userId) {
-        next();
-    } else {
-        res.redirect('/login');
+        return next();
     }
+    res.redirect('/login');
 }
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
