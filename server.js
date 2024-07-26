@@ -4,10 +4,9 @@ const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
 const session = require('express-session');
-const pgSession = require('connect-pg-simple')(session);
+const PgSession = require('connect-pg-simple')(session); // Fixed constructor name
 const path = require('path');
 const nodemailer = require('nodemailer');
-const crypto = require('crypto');
 
 const app = express();
 const PORT = 443;
@@ -25,7 +24,7 @@ const pool = new Pool(dbConfig);
 
 // Session configuration
 app.use(session({
-    store: new pgSession({
+    store: new PgSession({
         pool,
         tableName: 'session'
     }),
@@ -236,22 +235,26 @@ app.post('/signup', async (req, res) => {
         return res.json({ success: false, message: "All fields are required." });
     }
 
-    const storedOTP = req.session.otp;
-
-    if (otp !== storedOTP) {
-        return res.json({ success: false, message: "Invalid OTP. Please try again." });
-    }
-
-    delete req.session.otp;
-
     try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await pool.query(
-            'INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4)',
-            [username, hashedPassword, name, id]
-        );
+        const client = await pool.connect();
+        try {
+            const { rows } = await client.query('SELECT * FROM otps WHERE email = $1', [id]);
 
-        res.json({ success: true, message: "Signup successful!" });
+            if (rows.length === 0 || rows[0].otp !== otp) {
+                return res.json({ success: false, message: "Invalid OTP." });
+            }
+
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            await client.query(
+                'INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4)',
+                [username, hashedPassword, name, id]
+            );
+
+            res.json({ success: true, message: "Signup successful!" });
+        } finally {
+            client.release();
+        }
     } catch (error) {
         console.error('Error during signup:', error);
         res.status(500).json({ success: false, message: "Failed to sign up. Please try again." });
