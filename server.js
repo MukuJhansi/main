@@ -123,21 +123,15 @@ app.post('/generate-otp', csrfProtection, async (req, res) => {
 
         const client = await pool.connect();
         try {
-            // Generate a new OTP
             const otp = generateOTP();
-
-            // Check if the email already exists in the OTP table
             const { rows } = await client.query('SELECT * FROM otps WHERE email = $1', [id]);
 
             if (rows.length > 0) {
-                // Email already exists, update the OTP
                 await client.query('UPDATE otps SET otp = $1, created_at = NOW() WHERE email = $2', [otp, id]);
             } else {
-                // Email does not exist, insert new OTP
                 await client.query('INSERT INTO otps (email, otp, created_at) VALUES ($1, $2, NOW())', [id, otp]);
             }
 
-            // Send OTP email
             const mailOptions = {
                 from: process.env.EMAIL_USER,
                 to: id,
@@ -145,26 +139,24 @@ app.post('/generate-otp', csrfProtection, async (req, res) => {
                 text: `Your OTP for registration is: ${otp}`,
             };
 
-            try {
-                await transporter.sendMail(mailOptions);
-                // Store the OTP and other details in the session
-                req.session.otp = otp;
-                req.session.email = id; // Store email for verification
-                req.session.name = name;
-                req.session.mobile = mobile;
-                req.session.password = password;
+            await transporter.sendMail(mailOptions);
 
-                res.json({ success: true, otp });
-            } catch (emailError) {
-                console.error('Error sending OTP:', emailError);
-                res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
-            }
+            req.session.otp = otp;
+            req.session.email = id;
+            req.session.name = name;
+            req.session.mobile = mobile;
+            req.session.password = password;
+
+            res.json({ success: true, otp });
+        } catch (emailError) {
+            console.error('Error sending OTP:', emailError);
+            res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
         } finally {
             client.release();
         }
     } catch (error) {
         console.error('Error in /generate-otp:', error);
-        return res.status(500).json({ success: false, message: "Internal server error during OTP generation." });
+        res.status(500).json({ success: false, message: "Internal server error during OTP generation." });
     }
 });
 
@@ -178,7 +170,6 @@ app.post('/verify-otp', csrfProtection, async (req, res) => {
 
         const client = await pool.connect();
         try {
-            // Retrieve the OTP and email from the session
             const storedOTP = req.session.otp;
             const email = req.session.email;
 
@@ -186,44 +177,35 @@ app.post('/verify-otp', csrfProtection, async (req, res) => {
                 return res.status(400).json({ success: false, message: "OTP or email is missing in the session." });
             }
 
-            // Check if the provided OTP matches the stored OTP
             if (otp !== storedOTP) {
                 return res.status(400).json({ success: false, message: "Invalid OTP." });
             }
 
-            // Check if the email is already registered
             const { rows: userRows } = await client.query('SELECT * FROM users WHERE email = $1', [email]);
 
             if (userRows.length > 0) {
-                // Email is already registered
                 return res.json({ success: true, message: "Email is already registered. You can log in." });
             }
 
-            // Retrieve additional user data from session
             const name = req.session.name;
             const mobile = req.session.mobile;
             const password = req.session.password;
-
-            // Hash the password
             const hashedPassword = await bcrypt.hash(password, 10);
 
-            // Insert new user into the database
             await client.query(
                 'INSERT INTO users (username, password, name, email, mobile) VALUES ($1, $2, $3, $4, $5)',
                 [name, hashedPassword, name, email, mobile]
             );
 
-            // Delete OTP from the database
             await client.query('DELETE FROM otps WHERE email = $1', [email]);
 
-            // Respond with success
-            return res.json({ success: true, message: "Signup successful!" });
+            res.json({ success: true, message: "Signup successful!" });
         } finally {
             client.release();
         }
     } catch (error) {
         console.error('Error in /verify-otp:', error);
-        return res.status(500).json({ success: false, message: "Internal server error during OTP verification." });
+        res.status(500).json({ success: false, message: "Internal server error during OTP verification." });
     }
 });
 
@@ -250,19 +232,20 @@ app.post('/login', csrfProtection, async (req, res) => {
                 return res.status(400).json({ success: false, message: "Invalid email or password." });
             }
 
-            // Store user ID in the session
             req.session.userId = user.id;
-
-            // Respond with success
-            return res.json({ success: true, message: "Login successful!" });
+            res.json({ success: true, message: "Login successful!" });
         } finally {
             client.release();
         }
     } catch (error) {
         console.error('Error in /login:', error);
-        return res.status(500).json({ success: false, message: "Internal server error during login." });
+        res.status(500).json({ success: false, message: "Internal server error during login." });
     }
 });
+
+function generateOTP() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 // Middleware to check if user is authenticated
 function isAuthenticated(req, res, next) {

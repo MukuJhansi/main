@@ -17,7 +17,12 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             body: JSON.stringify({ name, id, mobile, password }),
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => { throw new Error(text) });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 // Display OTP field and show signup button
@@ -47,7 +52,12 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             body: JSON.stringify({ email, otp }),
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => { throw new Error(text) });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 alert("OTP verified successfully!");
@@ -88,7 +98,12 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             body: JSON.stringify({ username, password, name, id: email, otp }),
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => { throw new Error(text) });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 alert("Signup successful!");
