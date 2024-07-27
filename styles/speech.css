@@ -14,7 +14,7 @@ textarea,
     font-weight: normal;
     overflow-wrap: normal;
     background-color: black;
-    color: #fff;
+    color: #c91c1c;
 }
 
 html::-webkit-scrollbar {
@@ -31,7 +31,6 @@ body {
     font-family: 'Arial', sans-serif;
     margin: 0 auto;
     padding: 0;
-    background-color: #ffffff;
     max-width: device-width;
 }
 a{
