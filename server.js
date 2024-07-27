@@ -46,7 +46,6 @@ app.use(express.static('public'));
 app.use('/styles', express.static(path.join(__dirname, 'styles')));
 app.use('/pic/', express.static(path.join(__dirname, 'pic')));
 app.use('/video/', express.static(path.join(__dirname, 'video')));
-app.use('/', express.static(path.join(__dirname, 'home')));
 app.use('/html/', express.static(path.join(__dirname, 'html')));
 app.use('/script/', express.static(path.join(__dirname, 'scripts')));
 
@@ -106,16 +105,6 @@ app.get('/signup', (req, res) => {
 // Serve the login page
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'login.html'));
-});
-
-// Serve the speech page
-app.get('/speech', (req, res) => {
-    res.sendFile(path.join(__dirname, 'html', 'speech.html'));
-});
-
-// Serve the DRC page
-app.get('/drc', (req, res) => {
-    res.sendFile(path.join(__dirname, 'html', 'DRC.html'));
 });
 
 // Serve the dashboard page
