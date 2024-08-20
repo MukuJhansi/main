@@ -102,6 +102,11 @@ app.get('/signup', (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'signup.html'));
 });
 
+// Serve the calculator page
+app.get('/calculator', (req, res) => {
+    res.sendFile(path.join(__dirname, 'html', 'calculator.html'));
+});
+
 // Serve the login page
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'login.html'));
