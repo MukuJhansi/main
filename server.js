@@ -48,6 +48,7 @@ app.use('/pic/', express.static(path.join(__dirname, 'pic')));
 app.use('/video/', express.static(path.join(__dirname, 'video')));
 app.use('/html/', express.static(path.join(__dirname, 'html')));
 app.use('/script/', express.static(path.join(__dirname, 'scripts')));
+app.use('/files/', express.static(path.join(__dirname, 'files')));
 
 app.use(bodyParser.json());
 app.use(cors());
@@ -85,6 +86,11 @@ function generateOTP() {
 // Serve the home page
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'html', 'index.html'));
+});
+
+// Serve the gen page
+app.get('/gen', (req, res) => {
+    res.sendFile(path.join(__dirname, 'files', 'Gen.zip'));
 });
 
 // Serve the Rickroll page
