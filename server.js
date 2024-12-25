@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/react"
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -11,7 +12,6 @@ const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const csurf = require('csurf');
-
 const app = express();
 const PORT = 443;
 
